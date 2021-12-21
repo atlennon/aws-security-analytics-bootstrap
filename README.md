@@ -41,26 +41,21 @@ Single Account Deployment  |  Cross-Account Deployment
 
 ### Getting Started
 
-The [Security Analytics bootstrap CDK App](AWSSecurityAnalyticsBootstrap/cdk/app.py) will deploy a fully functional security analytics environment including:
+The [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml) or [Security Analytics Bootstrap CDK App](AWSSecurityAnalyticsBootstrap/cdk/app.py) can be used to deploy a fully functional security analytics environment including:
 
 Resource | Notes
 ---------|--------
 **Athena Workgroup** | - Configured to provide encrypted output to a specified S3 location<br>- Includes pre-configured demo queries as Named Queries
 **Glue Database** | - Contains associated Glue Tables
-**Glue Tables** | Standardized table schemas with dynamic partitions for account, region, and date for:<br>- CloudTrail Logs<br>- VPC Flow Logs<br>- Route53 DNS Resolver Logs <br>- ALB/ELB Logs 
-**IAM Roles** | *Optional*: IAM Roles and Policies for a Athena Admin and Athena Analyst Roles designed according to least privilege principals. Option must be specifed in `vars.py` file.  
-
-Alternatively you can deploy this using native CloudFormation by using the [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml) 
-
-*Note: This does not inlude the IAM roles those should be deployed using the* [Athena IAM Setup Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_IAM_setup.yml)  
+**Glue Tables** | Standardized table schemas with dynamic partitions for account, region, and date for:<br>- CloudTrail Logs<br>- VPC Flow Logs<br>- Route53 DNS Resolver Logs <br>- ALB/ELB Logs  
 
 **Deployment time:** ~10 minutes
 
-Comments are provided in the Parameters section of the cloudformation templates and the vars.py of the CDK app to assist with the parameters required for deployment, and a detailed walk-through of the deployment process is provided in the [AWS Security Analytics Bootstrap CDK Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) or [AWS Security Analytics Bootstrap Cloudformation Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cfn_deployment_guide.md) if you prefer to deploy using native cloudformation. *Note:* Using the CDK to deploy is recommended. Cloudformation does not support concurrent multi-region config for data sources that log on a per region basis such as ELBs/ALBs and cannot validate input parameter syntax.
+Comments are provided in the Parameters section of the CloudFormation templates and the vars file of the CDK app to assist with the parameters required for deployment, and a detailed walk-through of the deployment process is provided in the [AWS Security Analytics Bootstrap Cloudformation Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cfn_deployment_guide.md) or the [AWS Security Analytics Bootstrap CDK Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) if you prefer to deploy using the CDK.
 
 ----
 ## AWS Security Analytics Bootstrap Resources
-*Note:* The **Athena Infrastructure** can be deployed by itself or in combination with any of the additional resources depending on customers' use case(s) and requirements using the [CDK](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) or the [CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml).
+*Note:* The **Athena Infrastructure** can be deployed by itself or in combination with any of the additional resources depending on customers' use case(s) and requirements using the [CDK](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) or the [CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml). Please see the [Deployment Method Comparison Table](#deployment-method-comparison-table) for a side-by-side comparison of these deployment options.
 
 | Resource Type | Resource | Resource Provides | Cleanup/Removal Notes | 
 |  :--- | :---         | :---      |   :---        |    
@@ -74,6 +69,16 @@ Comments are provided in the Parameters section of the cloudformation templates 
 | Demo Athena Queries |  [AWS CloudTrail Demo Queries](AWSSecurityAnalyticsBootstrap/sql/dml/analytics/cloudtrail/cloudtrail_demo_queries.sql)  | Demo Athena queries for CloudTrail Logs. These queries area also created in the Athena Workgroup as Named Queries by the [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml)  | N/A - No resources created | 
 | Demo Athena Queries |  [Amazon VPC Flow Log Demo Queries](AWSSecurityAnalyticsBootstrap/sql/dml/analytics/vpcflow/vpcflow_demo_queries.sql)  | Demo Athena queries for VPC Flow Logs. These queries area also created in the Athena Workgroup as Named Queries by the [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml)  | N/A - No resources created | 
 | Demo Athena Queries |  [Amazon Route 53 Resolver Query Log Demo Queries](AWSSecurityAnalyticsBootstrap/sql/dml/analytics/dns/dns_demo_queries.sql)  | Demo Athena queries for Route 53 DNS Resolver Logs. These queries area also created in the Athena Workgroup as Named Queries by the [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml) | N/A - No resources created | 
+
+## Deployment Method Comparison Table
+
+| Deploy using CloudFormation | Deploy Using CDK | 
+|  :--- | :--- |   
+| Does not require any environment setup, can be deployed directly through the AWS console  | Requires the CDK and it's dependencies to be installed in an environment that has the required access to AWS using the AWS CLI | 
+Does not support concurrent multi-region config for data sources that log on a per region basis such as ELBs/ALBs  | Supports concurrent multi-region config for data sources that log on a per region basis such as ELBs/ALBs |  
+| Does not require any resources deployed ahead of time to deploy the CloudFormation template | Requires that the CDK be bootstrapped in the target account which creates an S3 bucket and IAM roels that are used by the CDK. More information on CDK bootstrapping  can be [found here](https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html)    | Creates the ready-to-use Athena security analytics environment including: Athena Workgroup, Glue Database, Glue Tables, and demo Named Queries. | All resources created by this template will be deleted when the CloudFormation Stack is deleted.  This will not affect the source log data. |
+ | Input parameter syntax in not validated and all regions to be used for Athena table partitions must be manually specified | Validates input parameter syntax and can dynamically retrieve a list of all AWS regions to be used in Athena table partitions  |  
+
 
 ## Currently Out of Scope
 - How data is provided to Amazon S3 buckets (e.g. configuration of logs)

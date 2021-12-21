@@ -171,10 +171,6 @@ class SecurityAnalytics(Stack):
                                 type="string"
                             ),
                             glue.CfnTable.ColumnProperty(
-                                name="errormessage",
-                                type="string"
-                            ),
-                            glue.CfnTable.ColumnProperty(
                                 name="recipientaccountid",
                                 type="string"
                             ),
@@ -393,8 +389,8 @@ class SecurityAnalytics(Stack):
                                 "projection.date_partition.format": "yyyy/MM/dd",
                                 "projection.date_partition.interval": "1",
                                 "projection.date_partition.interval.unit": "DAYS",
-                                "projection.region_partition.type": "enum",
-                                "projection.region_partition.values": DNSResolverVPCEnum,
+                                "projection.vpc_partition.type": "enum",
+                                "projection.vpc_partition.values": DNSResolverVPCEnum,
                                 "projection.account_partition.type": "enum",
                                 "projection.account_partition.values": DNSResolverAccountEnum,
                                 "storage.location.template": f"{DNSResolverSource}${{account_partition}}/vpcdnsquerylogs/${{vpc_partition}}/${{date_partition}}"
@@ -668,7 +664,7 @@ class SecurityAnalytics(Stack):
             )
 
         if ELBTableEnabled:
-            alb_table = glue.CfnTable(self, "ElbTable",
+            elb_table = glue.CfnTable(self, "ElbTable",
                 catalog_id=Aws.ACCOUNT_ID,
                 database_name=SecurityAnalyticsGlueDatabaseName,
                 table_input=glue.CfnTable.TableInputProperty(
@@ -807,6 +803,12 @@ class SecurityAnalytics(Stack):
                     table_type="EXTERNAL_TABLE"
                 )
             )
+
+            cloudtrail_table.add_depends_on(security_analytics_glue_database)
+            vpc_flow_table.add_depends_on(security_analytics_glue_database)
+            dns_resolver_table.add_depends_on(security_analytics_glue_database)
+            alb_table.add_depends_on(security_analytics_glue_database)
+            elb_table.add_depends_on(security_analytics_glue_database)
 
 app = App()
 SecurityAnalytics(

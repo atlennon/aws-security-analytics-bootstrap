@@ -12,8 +12,6 @@ To use this you must have the following installed:
 `AWS Cli` - https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html  
 `Git` - https://git-scm.com/downloads  
 
-The install-prerequisites.sh file in the `cdk` folder of this repo can be used to install all of these on Debian linux (Excluding AWS CLI which already comes pre-installed). Make sure to run with sufficent privileges.
-
 Additional information can be found here:
 
 https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html#getting_started_prerequisites
