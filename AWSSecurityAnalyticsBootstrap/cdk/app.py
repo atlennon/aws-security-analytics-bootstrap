@@ -667,6 +667,147 @@ class SecurityAnalytics(Stack):
                 )
             )
 
+        if ELBTableEnabled:
+            alb_table = glue.CfnTable(self, "ElbTable",
+                catalog_id=Aws.ACCOUNT_ID,
+                database_name=SecurityAnalyticsGlueDatabaseName,
+                table_input=glue.CfnTable.TableInputProperty(
+                    description="Table for ELB logs",
+                    name=ELBTableName,
+                    parameters={
+                                "classification": "csv",
+                                "EXTERNAL": "true",
+                                "skip.header.line.count": "1",
+                                "projection.enabled": "true",
+                                "projection.date_partition.type": "date",
+                                "projection.date_partition.range": f"{ELBProjectionEventStartDate},NOW",
+                                "projection.date_partition.format": "yyyy/MM/dd",
+                                "projection.date_partition.interval": "1",
+                                "projection.date_partition.interval.unit": "DAYS",
+                                "projection.account_partition.type": "enum",
+                                "projection.account_partition.values": ELBAccountEnum,
+                                "storage.location.template": f"{ELBSource}${{account_partition}}/elasticloadbalancing/{ELBRegion}/${{date_partition}}"
+                                },
+                    partition_keys=[
+                        glue.CfnTable.ColumnProperty(
+                            name="date_partition",
+                            type="string"
+                            ),
+                        glue.CfnTable.ColumnProperty(
+                            name="account_partition",
+                            type="string"
+                            )
+                    ],
+                    storage_descriptor=glue.CfnTable.StorageDescriptorProperty(
+                        columns=[
+                            glue.CfnTable.ColumnProperty(
+                                name="type",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="version",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="time",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="elb",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="listener_id",
+                                type="int"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="client_ip",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="client_port",
+                                type="int"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="target_ip",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="target_port",
+                                type="int"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="tcp_connection_time_ms",
+                                type="double"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="tls_handshake_time_ms",
+                                type="double"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="received_bytes",
+                                type="bigint"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="sent_bytes",
+                                type="bigint"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="incoming_tls_alert",
+                                type="int"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="cert_arn",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="certificate_serial",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="tls_cipher_suite",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="tls_protocol_version",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="tls_named_group",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="domain_name",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="alpn_fe_protocol",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="alpn_be_protocol",
+                                type="string"
+                            ),
+                            glue.CfnTable.ColumnProperty(
+                                name="alpn_client_preference_list",
+                                type="string"
+                            )
+                        ],
+                        input_format="org.apache.hadoop.mapred.TextInputFormat",
+                        location=ELBSource,
+                        output_format="org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+                        serde_info=glue.CfnTable.SerdeInfoProperty(
+                            parameters={
+                                "serialization.format": "1",
+                                "input.regex": '([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*):([0-9]*) ([^ ]*):([0-9]*) ([-.0-9]*) ([-.0-9]*) ([-0-9]*) ([-0-9]*) ([-0-9]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*)$'
+                            },
+                            serialization_library="org.apache.hadoop.hive.serde2.RegexSerDe"
+                        )
+                    ),
+                    table_type="EXTERNAL_TABLE"
+                )
+            )
+
 app = App()
 SecurityAnalytics(
                     app, "aws-security-analytics-bootstrap",
