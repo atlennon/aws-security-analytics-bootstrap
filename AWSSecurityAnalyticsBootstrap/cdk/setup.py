@@ -1,10 +1,10 @@
 import setuptools
 
 setuptools.setup(
-    name="cdk-security-analytics-bootstrap",
+    name="aws-security-analytics-bootstrap",
     version="1.0.0",
 
-    description="CDK Security Analytics Bootstrap Project",
+    description="AWS Security Analytics Bootstrap",
 
     author="author",
 
