@@ -23,6 +23,7 @@ AWS Security Analytics Bootstrap is designed to be ready to use for common secur
 [Amazon Virtual Private Cloud (VPC) Flow Logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html) | Network Events
 [Amazon Route 53 DNS resolver query logs](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-query-logs.html) | DNS Resolution Events
 [Amazon Application Load Balancer (ALB) logs](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html) | Application Traffic traversing Load Balancers
+[Amazon Network Load Balancer (ELB) logs](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-access-logs.html) | TLS Traffic Traversing Network Load Balancers  
 
 *NOTE:* We will be adding support for additional AWS Service Logs commonly used in security investigations, please feel free to submit or upvote your requests in `Issues`
 
@@ -34,32 +35,37 @@ Single Account Deployment  |  Cross-Account Deployment
 ## Deploying AWS Security Analytics Bootstrap
 
 ### Prerequisites
-- AWS service logs (e.g. AWS CloudTrail, Amazon VPC Flow Logs, Amazon Route 53 Resolver Query Logs, Amazon ALB Logs) must be delivered to Amazon S3 buckets unmodified in their native format
+- AWS service logs (e.g. AWS CloudTrail, Amazon VPC Flow Logs, Amazon Route 53 Resolver Query Logs, Amazon ALB/ELB Logs) must be delivered to Amazon S3 buckets unmodified in their native format
 - For [cross-account deployments](https://docs.aws.amazon.com/athena/latest/ug/cross-account-permissions.html) bucket policies must be in place and objects need to be owned by the bucket account owner to enable cross-account access
 - For logs encrypted via AWS KMS the AWS IAM principal(s) that will be used to submit Athena queries will need to have permissions for `kms:Decrypt` and `kms:DescribeKey` in their IAM policy and the KMS key policy will need to grant them the same access
 
 ### Getting Started
 
-
-The [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml) will deploy a fully functional security analytics environment including:
+The [Security Analytics bootstrap CDK App](AWSSecurityAnalyticsBootstrap/cdk/app.py) will deploy a fully functional security analytics environment including:
 
 Resource | Notes
 ---------|--------
 **Athena Workgroup** | - Configured to provide encrypted output to a specified S3 location<br>- Includes pre-configured demo queries as Named Queries
 **Glue Database** | - Contains associated Glue Tables
-**Glue Tables** | Standardized table schemas with dynamic partitions for account, region, and date for:<br>- CloudTrail Logs<br>- VPC Flow Logs<br>- Route53 DNS Resolver Logs 
+**Glue Tables** | Standardized table schemas with dynamic partitions for account, region, and date for:<br>- CloudTrail Logs<br>- VPC Flow Logs<br>- Route53 DNS Resolver Logs <br>- ALB/ELB Logs 
+**IAM Roles** | *Optional*: IAM Roles and Policies for a Athena Admin and Athena Analyst Roles designed according to least privilege principals. Option must be specifed in `vars.py` file.  
+
+Alternatively you can deploy this using native CloudFormation by using the [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml) 
+
+*Note: This does not inlude the IAM roles those should be deployed using the* [Athena IAM Setup Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_IAM_setup.yml)  
 
 **Deployment time:** ~10 minutes
 
-Comments are provided in the Parameters section to assist with the parameters required for deployment, and a detailed walk-through of the deployment process is provided in the [AWS Security Analytics Bootstrap CDK Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) or [AWS Security Analytics Bootstrap Cloudformation Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cfn_deployment_guide.md) if you prefer to deploy using native cloudformation. *Note:* Using the CDK to deploy is the recommended option. Cloudformation is less effecient than using the CDK as it cannot dynamically determine logging configuration settings in the target AWS account and does not support concurrent multi-region config for data sources that log on a per region basis such as ELBs/ALBs.
+Comments are provided in the Parameters section of the cloudformation templates and the vars.py of the CDK app to assist with the parameters required for deployment, and a detailed walk-through of the deployment process is provided in the [AWS Security Analytics Bootstrap CDK Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) or [AWS Security Analytics Bootstrap Cloudformation Deployment Guide](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cfn_deployment_guide.md) if you prefer to deploy using native cloudformation. *Note:* Using the CDK to deploy is recommended. Cloudformation does not support concurrent multi-region config for data sources that log on a per region basis such as ELBs/ALBs and cannot validate input parameter syntax.
 
 ----
 ## AWS Security Analytics Bootstrap Resources
-*Note:* The [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml) can be deployed by itself or in combination with any of the additional resources depending on customers' use case(s) and requirements.
+*Note:* The **Athena Infrastructure** can be deployed by itself or in combination with any of the additional resources depending on customers' use case(s) and requirements using the [CDK](AWSSecurityAnalyticsBootstrap/docs/aws_security_analytics_bootstrap_cdk_deployment_guide.md) or the [CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml).
 
 | Resource Type | Resource | Resource Provides | Cleanup/Removal Notes | 
 |  :--- | :---         | :---      |   :---        |    
-| AWS CloudFormation Template | [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml)   | Creates the ready-to-use Athena security analytics environment including: Athena Workgroup, Glue Database, Glue Tables, and demo Named Queries.yy | All resources created by this template will be deleted when the CloudFormation Stack is deleted.  This will not affect the source log data. |
+| CDK Python App | [AWS Security Analytics Bootstrap CDK App](AWSSecurityAnalyticsBootstrap/cdk/app.py)   | Creates the ready-to-use Athena security analytics environment including: Athena Workgroup, Glue Database, Glue Tables, and demo Named Queries. Optionally, creates IAM Roles and Policies for a Athena Admin and Athena Analyst Roles designed according to least privilege principals if this option is specified in the `vars.py` file.  | All resources except for the s3 bucket that is created to store Athena query results will be deleted when the `cdk destroy` command is run or the associated CloudFormation Stack is deleted. The s3 bucket must be deleted manaully. This will not affect the source log data. |
+| AWS CloudFormation Template | [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml)   | Creates the ready-to-use Athena security analytics environment including: Athena Workgroup, Glue Database, Glue Tables, and demo Named Queries. | All resources created by this template will be deleted when the CloudFormation Stack is deleted.  This will not affect the source log data. |
 | AWS CloudFormation Template | [IAM Roles and Policies for Athena Admin and Athena Analyst](AWSSecurityAnalyticsBootstrap/cfn/Athena_IAM_setup.yml)     | Creates IAM Roles and Policies for a Athena Admin and Athena Analyst Roles designed according to least privilege principals|  All resources created by this template will be deleted when the CloudFormation Stack is deleted. |
 | AWS CloudFormation Template | [Enable flow logs](AWSSecurityAnalyticsBootstrap/cfn/VPC_enable_flowlogs.yml)    | Enables VPC Flow Logs for the specified VPC, Subnet, or ENI with [all fields through v5](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html#flow-logs-fields) in the order expected by Athena Bootstrap   | The VPC Flow log configuration will be deleted when the CloudFormation Stack is deleted.  Any logs created will need to be deleted separately from the target S3 bucket if desired. |
 | CREATE TABLE SQL Statement |  [AWS CloudTrail Table Schema](AWSSecurityAnalyticsBootstrap/sql/ddl/create_tables/create_cloudtrail_table.sql) | Creates a Glue Table for CloudTrail Logs partitioned by account, region and date via Athena SQL query statement. This table is also created by the [Athena Infrastructure CloudFormation Template](AWSSecurityAnalyticsBootstrap/cfn/Athena_infra_setup.yml); this SQL statement can be used to create a table in an existing Athena environment for adhoc deployment use cases.  "TODO" comments are included above sections which need to be updated with customers' environment details.  |  The table can be deleted with the Athena query statement `DROP TABLE <table name>` (e.g. `DROP TABLE cloudtrail`) | 
@@ -117,7 +123,7 @@ Many thanks for your contributions:
 - Jonathon Poling
 - Joshua McKiddy
 - Justin Fry
-- Kyle Dickenson
+- Kyle Dickinson
 - Luis Maldonado
 - Matt Gurr
 - Matt Helgen
