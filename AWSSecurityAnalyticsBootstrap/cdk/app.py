@@ -868,20 +868,20 @@ class SecurityAnalytics(Stack):
 # Get all log source buckets and add to list
             log_source_buckets=[]
             if CloudTrailTableEnabled:
-                log_source_buckets.append(CloudTrailSource[0:CloudTrailSource.find('/',5)])
-                log_source_buckets.append(CloudTrailSource[0:CloudTrailSource.find('/',5)]+'/*')
+                log_source_buckets.append('arn:aws:s3:::'+CloudTrailSource[5:CloudTrailSource.find('/',5)])
+                log_source_buckets.append('arn:aws:s3:::'+CloudTrailSource[5:CloudTrailSource.find('/',5)]+'/*')
             if VPCFlowTableEnabled:
-                log_source_buckets.append(VPCFlowSource[0:VPCFlowSource.find('/',5)])
-                log_source_buckets.append(VPCFlowSource[0:VPCFlowSource.find('/',5)]+'/*')
+                log_source_buckets.append('arn:aws:s3:::'+VPCFlowSource[5:VPCFlowSource.find('/',5)])
+                log_source_buckets.append('arn:aws:s3:::'+VPCFlowSource[5:VPCFlowSource.find('/',5)]+'/*')
             if DNSResolverTableEnabled:
-                log_source_buckets.append(DNSResolverSource[0:DNSResolverSource.find('/',5)])
-                log_source_buckets.append(DNSResolverSource[0:DNSResolverSource.find('/',5)]+'/*')
+                log_source_buckets.append('arn:aws:s3:::'+DNSResolverSource[5:DNSResolverSource.find('/',5)])
+                log_source_buckets.append('arn:aws:s3:::'+DNSResolverSource[5:DNSResolverSource.find('/',5)]+'/*')
             if ALBTableEnabled:
-                log_source_buckets.append(ALBSource[0:ALBSource.find('/',5)])
-                log_source_buckets.append(ALBSource[0:ALBSource.find('/',5)]+'/*')
+                log_source_buckets.append('arn:aws:s3:::'+ALBSource[5:ALBSource.find('/',5)])
+                log_source_buckets.append('arn:aws:s3:::'+ALBSource[5:ALBSource.find('/',5)]+'/*')
             if ELBTableEnabled:
-                log_source_buckets.append(ELBSource[0:ELBSource.find('/',5)])
-                log_source_buckets.append(ELBSource[0:ELBSource.find('/',5)]+'/*')
+                log_source_buckets.append('arn:aws:s3:::'+ELBSource[5:ELBSource.find('/',5)])
+                log_source_buckets.append('arn:aws:s3:::'+ELBSource[5:ELBSource.find('/',5)]+'/*')
 
 # Athena analyst role
             athena_analyst_role = iam.Role(self, "AthenaAnalystRole",
