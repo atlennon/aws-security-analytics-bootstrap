@@ -44,7 +44,11 @@ ELBAccountEnum='<account_num_1>,<account_num_2>,...'#Account(s) to include in th
 
 # IAM Roles Parameters
 DeployIamRoles=True #Set to True to deploy least privilege Athena Admin and Athena Analyst IAM Roles that can be used to access the Athena Security Analytics workspace and associated data sources
+
 # TODO: Replace vars below with arn of roles you want to be able to assuem these roles
 # Reference: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_permissions-to-switch.html#roles-usingrole-createpolicy
 AthenaAnalystAssumeRoleArn='ANY' #Arn of existing role you want to be able to assume the Athena Analyst role, if set to 'ANY' any role in the account will be able to assume the role
 AthenaAdminAssumeRoleArn='ANY' #Arn of existing role you want to be able to assume the Athena Analyst role, if set to 'ANY' any role in the account will be able to assume the role
+# LogSourceLocations='bucket_name/prefix/AWSLogs/,bucket_name2/prefix2/AWSLogs/' # Can be retrieved from other vars #"Full path(s) for logs Athena will query in the form '<bucket_name>/<optional_prefix>/AWSLogs/' (comma seperated, no spaces between values)"
+# QueryOutputLocation='query_history_bucket/optional_prefix/' #bucket is dynamically created by CDK can ref output object # "Full path for Athena output in the form '<bucket_name>/<optional_prefix>/'"
+# ParamAllBucketNames='log_bucket_1,log_bucket_2,output_bucket' #'The name of all buckets, including log buckets and Athena output bucket (comma seperated, no spaces between values)'

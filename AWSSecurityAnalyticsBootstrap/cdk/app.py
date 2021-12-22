@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import sys
 from constructs import Construct
 from aws_cdk import (
-    App, Stack, Aws,
+    App, Stack, Aws, CfnOutput,
     aws_s3 as s3,
     aws_athena as athena,
-    aws_glue as glue
+    aws_glue as glue,
+    aws_iam as iam
 )
 
 from vars import *
@@ -13,7 +15,7 @@ class SecurityAnalytics(Stack):
 
     def __init__(self, scope: App, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-        
+
         query_output_location = s3.Bucket(self, "QueryOutputLocation")
         security_analytics_workgroup = athena.CfnWorkGroup(self, "SecurityAnalytics",
             name="SecurityAnalytics",
@@ -201,6 +203,8 @@ class SecurityAnalytics(Stack):
                 )
             )
 
+            cloudtrail_table.add_depends_on(security_analytics_glue_database)
+
         if VPCFlowTableEnabled:
             vpc_flow_table = glue.CfnTable(self, "VpcFlowTable",
                 catalog_id=Aws.ACCOUNT_ID,
@@ -372,6 +376,8 @@ class SecurityAnalytics(Stack):
                 )
             )
 
+            vpc_flow_table.add_depends_on(security_analytics_glue_database)
+
         if DNSResolverTableEnabled:
             dns_resolver_table = glue.CfnTable(self, "DnsResolverTable",
                 catalog_id=Aws.ACCOUNT_ID,
@@ -481,6 +487,8 @@ class SecurityAnalytics(Stack):
                     table_type="EXTERNAL_TABLE"
                 )
             )
+
+            dns_resolver_table.add_depends_on(security_analytics_glue_database)
 
         if ALBTableEnabled:
             alb_table = glue.CfnTable(self, "AlbTable",
@@ -663,6 +671,8 @@ class SecurityAnalytics(Stack):
                 )
             )
 
+            alb_table.add_depends_on(security_analytics_glue_database)
+
         if ELBTableEnabled:
             elb_table = glue.CfnTable(self, "ElbTable",
                 catalog_id=Aws.ACCOUNT_ID,
@@ -804,11 +814,357 @@ class SecurityAnalytics(Stack):
                 )
             )
 
-            cloudtrail_table.add_depends_on(security_analytics_glue_database)
-            vpc_flow_table.add_depends_on(security_analytics_glue_database)
-            dns_resolver_table.add_depends_on(security_analytics_glue_database)
-            alb_table.add_depends_on(security_analytics_glue_database)
             elb_table.add_depends_on(security_analytics_glue_database)
+
+            ResourceDemoQueryCloudTrail1 = athena.CfnNamedQuery(self, "ResourceDemoQueryCloudTrail1",
+                database=SecurityAnalyticsGlueDatabaseName,
+                query_string="-- preview first 10 rows with all fields, limited by a combination partition constraints \
+                            -- NOTE: narrowing the scope of the query as much as possible will improve performance and minimize cost \
+                            SELECT * from cloudtrail \
+                            WHERE date_partition >= '2021/07/01' \
+                            AND date_partition <= '2021/07/31' \
+                            AND account_partition = '111122223333' \
+                            AND region_partition in ('us-east-1','us-east-2','us-west-1', 'us-west-2') \
+                            LIMIT 10;",
+                description="preview first 10 rows with all fields, limited by a combination partition constraints",
+                name="DEMO_CloudTrail_AllPartitions",
+                work_group="SecurityAnalytics"
+            )
+
+            ResourceDemoQueryCloudTrail1.add_depends_on(cloudtrail_table)
+
+            # ResourceDemoQueryVPCFlow1 = athena.CfnNamedQuery(self, "ResourceDemoQueryVPCFlow1",
+            #     database=SecurityAnalyticsGlueDatabaseName,
+            #     query_string="-- preview first 10 rows with all fields, limited by a combination partition constraints \
+            #                   -- NOTE: narrowing the scope of the query as much as possible will improve performance and minimize cost \
+            #                   SELECT * from vpcflow \
+            #                   WHERE date_partition >= '2021/07/01' \
+            #                   AND date_partition <= '2021/07/31' \
+            #                   AND account_partition = '111122223333' \
+            #                   AND region_partition in ('us-east-1','us-east-2','us-west-2', 'us-west-2') \
+            #                   LIMIT 10;",
+            #     description="preview first 10 rows with all fields, limited by a combination partition constraints",
+            #     name="DEMO_VPCFlow_AllPartitions",
+            #     work_group="SecurityAnalytics"
+            # )
+
+# Deploy Athena Admin and Analyst IAM Roles if option is selected in vars.py file
+        if DeployIamRoles:
+
+            if AthenaAnalystAssumeRoleArn == 'ANY':
+                athena_analyst_role_assumer=iam.AccountPrincipal(Aws.ACCOUNT_ID)
+            elif AthenaAnalystAssumeRoleArn != '':
+                athena_analyst_role_assumer = iam.Role.from_role_arn(self, "AthenaAnalystRoleAssumer", role_arn=AthenaAnalystAssumeRoleArn)
+            else:
+                sys.exit("Error: No value specified for 'AthenaAnalystAssumeRoleArn' please check the vars.py file")
+
+            if AthenaAdminAssumeRoleArn == 'ANY':
+                athena_admin_role_assumer=iam.AccountPrincipal(Aws.ACCOUNT_ID)
+            elif AthenaAdminAssumeRoleArn != '':
+                athena_admin_role_assumer = iam.Role.from_role_arn(self, "AthenaAdminRoleAssumer", role_arn=AthenaAdminAssumeRoleArn)
+            else:
+                sys.exit("Error: No value specified for 'AthenaAdminAssumeRoleArn' please check the vars.py file")
+
+# Get all log source buckets and add to list
+            log_source_buckets=[]
+            if CloudTrailTableEnabled:
+                log_source_buckets.append(CloudTrailSource[0:CloudTrailSource.find('/',5)])
+                log_source_buckets.append(CloudTrailSource[0:CloudTrailSource.find('/',5)]+'/*')
+            if VPCFlowTableEnabled:
+                log_source_buckets.append(VPCFlowSource[0:VPCFlowSource.find('/',5)])
+                log_source_buckets.append(VPCFlowSource[0:VPCFlowSource.find('/',5)]+'/*')
+            if DNSResolverTableEnabled:
+                log_source_buckets.append(DNSResolverSource[0:DNSResolverSource.find('/',5)])
+                log_source_buckets.append(DNSResolverSource[0:DNSResolverSource.find('/',5)]+'/*')
+            if ALBTableEnabled:
+                log_source_buckets.append(ALBSource[0:ALBSource.find('/',5)])
+                log_source_buckets.append(ALBSource[0:ALBSource.find('/',5)]+'/*')
+            if ELBTableEnabled:
+                log_source_buckets.append(ELBSource[0:ELBSource.find('/',5)])
+                log_source_buckets.append(ELBSource[0:ELBSource.find('/',5)]+'/*')
+
+# Athena analyst role
+            athena_analyst_role = iam.Role(self, "AthenaAnalystRole",
+                role_name="security_analytics_athena_analyst",
+                assumed_by=athena_analyst_role_assumer,
+                description="Provides analyst access to security analytics athena workspace"
+            )
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityNamedQueryFullAccess",
+            actions=[
+                "athena:BatchGetNamedQuery",
+                "athena:CreateNamedQuery",
+                "athena:DeleteNamedQuery",
+                "athena:GetNamedQuery",
+                "athena:ListNamedQueries"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Workgroup resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for Athena Workgroup resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple workgroups.
+#       If you only plan to use a single workgroup, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the workgroups you plan to use.
+            resources=[f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/Security*",f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/security_*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityWorkgroupReadOnly",
+            actions=[
+                "athena:GetWorkGroup",
+                "athena:ListWorkGroups",
+                "athena:BatchGetQueryExecution",
+                "athena:GetQueryExecution",
+                "athena:GetQueryResults",
+                "athena:GetQueryResultsStream",
+                "athena:ListQueryExecutions",
+                "athena:ListTagsForResource",
+                "athena:StartQueryExecution",
+                "athena:StopQueryExecution"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Workgroup resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for Athena Workgroup resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple workgroups.
+#       If you only plan to use a single workgroup, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the workgroups you plan to use.  
+            resources=[f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/Security*",f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/security_*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityAthenaDataCatalogReadOnly",
+            actions=[
+                "athena:GetDataCatalog",
+                "athena:ListDataCatalogs",
+                "athena:GetDatabase",
+                "athena:ListDatabases",
+                "athena:GetTableMetadata",
+                "athena:ListTableMetadata"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Data Catalog resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Athena Data Catalog resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple data catalogs.
+#       If you only plan to use a single data catalog, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the data catalog you plan to use.  
+            resources=[f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:datacatalog/Security*",f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:datacatalog/security_*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityGlueDatabaseReadOnly",
+            actions=[
+                "glue:GetDatabase",
+                "glue:GetDatabases"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Glue Database resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Glue Database resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple databases.
+#       If you only plan to use a single database, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the database you plan to use.  
+            resources=[f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/Security*",f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/security_*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityGlueTableReadOnly",
+            actions=[
+                "glue:GetTable",
+                "glue:GetTables"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Glue Table resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Glue Table resources are associated with a Glue Database that starts with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple databases.
+#       Note that Glue Table ARNs are in the format arn:aws:glue:region:account-id:table/database name/table name, so this will allow any table naming scheme as long as it is associated with a Glue Database staringing with 'Security' or 'security_'.
+#       If you only plan to use a single database, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the database you plan to use.
+#       You may also specify the full Database/Table name explicitly in the ARN if you know would like to limit the actions to only those tables explicitly.
+            resources=[f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:table/Security*",f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:table/security_*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityGluePartitionReadOnly",
+            actions=[
+                "glue:BatchGetPartition",
+                "glue:GetPartition",
+                "glue:GetPartitions"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Glue Database resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Glue Database resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple databases.
+#       If you only plan to use a single database, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the database you plan to use.  
+            resources=[f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/Security*",f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/security_*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="AthenaOutputBucketReadWrite",
+            actions=[
+                "s3:AbortMultipartUpload",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:ListBucketMultipartUploads",
+                "s3:ListMultipartUploadParts",
+                "s3:PutObject"
+            ],
+# Note: The '*' in each resource below is to allow the actions above on all S3 Objects in the specified S3 Bucket.  If you'd like to limit it to a specific path you could for example specify '/athena/*'
+            resources=[f"{query_output_location.bucket_arn}*"]
+            ))
+
+            athena_analyst_role.add_to_policy(iam.PolicyStatement(
+            sid="LogSourceBucketReadOnly",
+            actions=[
+                "s3:GetObject",
+                "s3:GetBucketLocation",
+                "s3:ListBucket"
+            ],
+            resources=log_source_buckets
+            ))
+
+            CfnOutput(self, "OutputAthenaSecurityAnalystRoleArn", value=athena_analyst_role.role_arn, description="Athena Analyst Role ARN")
+
+# Athena admin role
+            athena_admin_role = iam.Role(self, "AthenaAdminRole",
+                role_name="security_analytics_athena_admin",
+                assumed_by=athena_admin_role_assumer,
+                description="Provides admin access to security analytics athena workspace"
+            )
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityNamedQueryFullAccess",
+            actions=[
+                "athena:BatchGetNamedQuery",
+                "athena:CreateNamedQuery",
+                "athena:DeleteNamedQuery",
+                "athena:GetNamedQuery",
+                "athena:ListNamedQueries"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Workgroup resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for Athena Workgroup resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple workgroups.
+#       If you only plan to use a single workgroup, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the workgroups you plan to use.
+            resources=[f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/Security*",f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityWorkgroupFullAccess",
+            actions=[
+                "athena:CreateWorkGroup",
+                "athena:DeleteWorkGroup",
+                "athena:GetWorkGroup",
+                "athena:ListWorkGroups",
+                "athena:UpdateWorkGroup",
+                "athena:BatchGetQueryExecution",
+                "athena:GetQueryExecution",
+                "athena:GetQueryResults",
+                "athena:GetQueryResultsStream",
+                "athena:ListQueryExecutions",
+                "athena:ListTagsForResource",
+                "athena:StartQueryExecution",
+                "athena:StopQueryExecution"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Workgroup resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for Athena Workgroup resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple workgroups.
+#       If you only plan to use a single workgroup, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the workgroups you plan to use.  
+            resources=[f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/Security*",f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityAthenaDataCatalogFullAccess",
+            actions=[
+                "athena:CreateDataCatalog",
+                "athena:DeleteDataCatalog",
+                "athena:GetDataCatalog",
+                "athena:ListDataCatalogs",
+                "athena:UpdateDataCatalog",
+                "athena:GetDatabase",
+                "athena:ListDatabases",
+                "athena:GetTableMetadata",
+                "athena:ListTableMetadata"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Data Catalog resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Athena Data Catalog resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple data catalogs.
+#       If you only plan to use a single data catalog, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the data catalog you plan to use.  
+            resources=[f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:datacatalog/Security*",f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:datacatalog/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityGlueDatabaseFullAccess",
+            actions=[
+                "glue:CreateDatabase",
+                "glue:DeleteDatabase",
+                "glue:GetDatabase",
+                "glue:GetDatabases",
+                "glue:UpdateDatabase"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Glue Database resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Glue Database resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple databases.
+#       If you only plan to use a single database, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the database you plan to use.  
+            resources=[f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/Security*",f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityGlueTableFullAccess",
+            actions=[
+                "glue:BatchDeleteTable",
+                "glue:CreateTable",
+                "glue:DeleteTable",
+                "glue:GetTable",
+                "glue:GetTables",
+                "glue:UpdateTable"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Glue Table resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Glue Table resources are associated with a Glue Database that starts with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple databases.
+#       Note that Glue Table ARNs are in the format arn:aws:glue:region:account-id:table/database name/table name, so this will allow any table naming scheme as long as it is associated with a Glue Database staringing with 'Security' or 'security_'.
+#       If you only plan to use a single database, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the database you plan to use.
+#       You may also specify the full Database/Table name explicitly in the ARN if you know would like to limit the actions to only those tables explicitly.
+            resources=[f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:table/Security*",f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:table/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityGluePartitionReadWrite",
+            actions=[
+                "glue:BatchCreatePartition",
+                "glue:BatchDeletePartition",
+                "glue:BatchGetPartition",
+                "glue:CreatePartition",
+                "glue:DeletePartition",
+                "glue:GetPartition",
+                "glue:GetPartitions",
+                "glue:UpdatePartition"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Glue Database resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for all Glue Database resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple databases.
+#       If you only plan to use a single database, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the database you plan to use.  
+            resources=[f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/Security*",f"arn:aws:glue:*:{Aws.ACCOUNT_ID}:database/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="SecurityAthenaTagResources",
+            actions=[
+                "athena:TagResource",
+                "athena:UntagResource"
+            ],
+# Note: The first '*' in each resource below is to allow the actions above for Athena Workgroup resources in all regions, if only one region will be used you may specify the specific region or use ${AWS::Region} to specify the current region
+#       The second '*' in each resource below is to allow the actions above for Athena Workgroup resources which start with 'Security' or 'security_' as a standard naming scheme, which allows flexibility if you want to use multiple workgroups.
+#       If you only plan to use a single workgroup, you may specify the name here and replace 'Security*' or 'security_' with the explicit name(s) of the workgroups you plan to use. 
+            resources=[
+                    f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/Security*",
+                    f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:workgroup/security_*",
+                    f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:datacatalog/security_*",
+                    f"arn:aws:athena:*:{Aws.ACCOUNT_ID}:datacatalog/security_*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="AthenaOutputBucketReadWrite",
+            actions=[
+                "s3:AbortMultipartUpload",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:ListBucketMultipartUploads",
+                "s3:ListMultipartUploadParts",
+                "s3:PutObject"
+            ],
+# Note: The '*' in each resource below is to allow the actions above on all S3 Objects in the specified S3 Bucket.  If you'd like to limit it to a specific path you could for example specify '/athena/*'
+            resources=[f"{query_output_location.bucket_arn}*"]
+            ))
+
+            athena_admin_role.add_to_policy(iam.PolicyStatement(
+            sid="LogSourceBucketReadOnly",
+            actions=[
+                "s3:GetObject",
+                "s3:GetBucketLocation",
+                "s3:ListAllMyBuckets",
+                "s3:ListBucket"
+            ],
+            resources=log_source_buckets
+            ))
+
+            CfnOutput(self, "OutputAthenaSecurityAdminRoleArn", value=athena_admin_role.role_arn, description="Athena Admin Role ARN")
 
 app = App()
 SecurityAnalytics(
